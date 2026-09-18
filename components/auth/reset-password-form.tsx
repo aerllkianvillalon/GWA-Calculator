@@ -86,15 +86,13 @@ export function RequestResetForm() {
           onChange={(e) => setEmail(e.target.value)}
         />
 
-        <div className="rounded-md border border-ink-100 bg-white p-3">
-          <div
-            ref={widgetRef}
-            className="cf-turnstile"
-            data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-            data-callback="onTurnstileSuccess"
-            data-size="flexible"
-          />
-        </div>
+        <div
+          ref={widgetRef}
+          className="cf-turnstile"
+          data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+          data-callback="onTurnstileSuccess"
+          data-size="flexible"
+        />
 
         {status === "error" && (
           <Alert tone="error">Something went wrong. Please try again in a moment.</Alert>
