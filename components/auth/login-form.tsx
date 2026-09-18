@@ -1,13 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Script from "next/script";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+
+declare global {
+  interface Window {
+    turnstile?: { reset: (widgetId?: string) => void };
+    onTurnstileSuccessLogin?: (token: string) => void;
+  }
+}
 
 export function LoginForm() {
   const router = useRouter();
@@ -16,20 +24,39 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    window.onTurnstileSuccessLogin = (token: string) => setCaptchaToken(token);
+    return () => {
+      delete window.onTurnstileSuccessLogin;
+    };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    if (!captchaToken) {
+      setStatus("error");
+      setMessage("Please complete the verification challenge.");
+      return;
+    }
+
     setStatus("loading");
     setMessage(null);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+      options: { captchaToken },
+    });
 
     if (error) {
       setStatus("error");
-      // Supabase error messages are already safe to show (no stack traces,
-      // no internal details), but we keep the wording generic on purpose.
       setMessage("That email and password combination didn't work. Please try again.");
+      setCaptchaToken(null);
+      window.turnstile?.reset();
       return;
     }
 
@@ -40,34 +67,43 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      <Input
-        label="Email"
-        type="email"
-        autoComplete="email"
-        required
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <PasswordInput
-        label="Password"
-        autoComplete="current-password"
-        required
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
+    <>
+      <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+        <Input
+          label="Email"
+          type="email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <PasswordInput
+          label="Password"
+          autoComplete="current-password"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
 
-      {status === "error" && <Alert tone="error">{message}</Alert>}
+        <div
+          className="cf-turnstile"
+          data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+          data-callback="onTurnstileSuccessLogin"
+        />
 
-      <Button type="submit" isLoading={status === "loading"}>
-        Log in
-      </Button>
+        {status === "error" && <Alert tone="error">{message}</Alert>}
 
-      <p className="text-sm text-ink-500">
-        <Link href="/reset-password" className="underline">
-          Forgot your password?
-        </Link>
-      </p>
-    </form>
+        <Button type="submit" isLoading={status === "loading"} disabled={!captchaToken}>
+          Log in
+        </Button>
+
+        <p className="text-sm text-ink-500">
+          <Link href="/reset-password" className="underline">
+            Forgot your password?
+          </Link>
+        </p>
+      </form>
+    </>
   );
 }

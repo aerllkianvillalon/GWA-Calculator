@@ -1,12 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Script from "next/script";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+
+declare global {
+  interface Window {
+    turnstile?: { reset: (widgetId?: string) => void };
+    onTurnstileSuccessRegister?: (token: string) => void;
+  }
+}
 
 export function RegisterForm() {
   const searchParams = useSearchParams();
@@ -15,6 +23,14 @@ export function RegisterForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "error" | "sent">("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    window.onTurnstileSuccessRegister = (token: string) => setCaptchaToken(token);
+    return () => {
+      delete window.onTurnstileSuccessRegister;
+    };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,6 +43,11 @@ export function RegisterForm() {
     if (password !== confirmPassword) {
       setStatus("error");
       setMessage("Passwords don't match.");
+      return;
+    }
+    if (!captchaToken) {
+      setStatus("error");
+      setMessage("Please complete the verification challenge.");
       return;
     }
 
@@ -44,6 +65,7 @@ export function RegisterForm() {
         emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?redirect=${encodeURIComponent(
           redirect
         )}${restore ? "&restore=1" : ""}`,
+        captchaToken,
       },
     });
 
@@ -55,13 +77,11 @@ export function RegisterForm() {
           ? "An account with that email already exists."
           : "We couldn't create your account. Please try again."
       );
+      setCaptchaToken(null);
+      window.turnstile?.reset();
       return;
     }
 
-    // Supabase returns a fake success (no error) when the email is already
-    // registered and confirmed, to prevent account enumeration. A genuinely
-    // new sign-up has at least one identity attached; an existing account
-    // comes back with an empty identities array.
     if (data.user && data.user.identities && data.user.identities.length === 0) {
       setStatus("error");
       setMessage("An account with that email already exists.");
@@ -80,44 +100,53 @@ export function RegisterForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      <Input
-        label="Email"
-        type="email"
-        autoComplete="email"
-        required
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <PasswordInput
-        label="Password"
-        autoComplete="new-password"
-        required
-        hint="At least 8 characters."
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <PasswordInput
-        label="Confirm password"
-        autoComplete="new-password"
-        required
-        value={confirmPassword}
-        onChange={(e) => setConfirmPassword(e.target.value)}
-      />
+    <>
+      <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+        <Input
+          label="Email"
+          type="email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <PasswordInput
+          label="Password"
+          autoComplete="new-password"
+          required
+          hint="At least 8 characters."
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <PasswordInput
+          label="Confirm password"
+          autoComplete="new-password"
+          required
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+        />
 
-      {status === "error" && <Alert tone="error">{message}</Alert>}
+        <div
+          className="cf-turnstile"
+          data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+          data-callback="onTurnstileSuccessRegister"
+        />
 
-      <Button type="submit" isLoading={status === "loading"}>
-        Create account
-      </Button>
+        {status === "error" && <Alert tone="error">{message}</Alert>}
 
-      <p className="text-xs text-ink-500">
-        We only ask for an email and password. See our{" "}
-        <a href="/privacy" className="underline">
-          privacy notice
-        </a>{" "}
-        for what we store.
-      </p>
-    </form>
+        <Button type="submit" isLoading={status === "loading"}>
+          Create account
+        </Button>
+
+        <p className="text-xs text-ink-500">
+          We only ask for an email and password. See our{" "}
+          <a href="/privacy" className="underline">
+            privacy notice
+          </a>{" "}
+          for what we store.
+        </p>
+      </form>
+    </>
   );
 }
