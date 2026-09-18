@@ -48,6 +48,7 @@ export function RegisterForm() {
     });
 
     if (error) {
+      console.error("Supabase signUp error:", error.message, error.status);
       setStatus("error");
       setMessage(
         error.message.toLowerCase().includes("already registered")
