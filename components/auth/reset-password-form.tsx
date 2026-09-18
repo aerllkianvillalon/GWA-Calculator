@@ -18,7 +18,7 @@ const [status, setStatus] = useState<"idle" | "loading" | "sent" | "error" | "ra
 
     const supabase = createClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?redirect=/reset-password/confirm`,
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?redirect=/reset-password/confirm`,
     });
 
     if (error) {
