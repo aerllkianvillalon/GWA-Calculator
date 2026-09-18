@@ -27,8 +27,7 @@ export default async function CalculatorPage() {
           Calculate your General Weighted Average
         </h1>
         <p className="mt-3 max-w-xl text-ink-700">
-          Add your subjects, units, and grades below to get your GWA right away — no account
-          needed. Built with the Philippine 1.00–5.00 numeric scale in mind, with other grading
+          Add your subjects, units, and grades below to get your GWA right away. Built with the Philippine 1.00–5.00 numeric scale in mind, with other grading
           scales available if your school uses one of those instead.
         </p>
       </header>
