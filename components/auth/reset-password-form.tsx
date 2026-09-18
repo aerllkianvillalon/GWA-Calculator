@@ -1,24 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Script from "next/script";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 
+declare global {
+  interface Window {
+    turnstile?: {
+      reset: (widgetId?: string) => void;
+    };
+    onTurnstileSuccess?: (token: string) => void;
+  }
+}
+
 /** Step 1: request a password-reset email. */
 export function RequestResetForm() {
   const [email, setEmail] = useState("");
-const [status, setStatus] = useState<"idle" | "loading" | "sent" | "error" | "rate_limited">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "sent" | "error" | "rate_limited">(
+    "idle"
+  );
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const widgetRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    window.onTurnstileSuccess = (token: string) => setCaptchaToken(token);
+    return () => {
+      delete window.onTurnstileSuccess;
+    };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    if (!captchaToken) {
+      setStatus("error");
+      return;
+    }
+
     setStatus("loading");
 
     const supabase = createClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?redirect=/reset-password/confirm`,
+      captchaToken,
     });
 
     if (error) {
@@ -27,6 +55,9 @@ const [status, setStatus] = useState<"idle" | "loading" | "sent" | "error" | "ra
       } else {
         setStatus("error");
       }
+      // Turnstile tokens are single-use; reset so the widget issues a fresh one.
+      setCaptchaToken(null);
+      window.turnstile?.reset();
     } else {
       // Always show the same success message whether or not the email exists,
       // so this form can't be used to enumerate registered accounts.
@@ -43,27 +74,39 @@ const [status, setStatus] = useState<"idle" | "loading" | "sent" | "error" | "ra
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      <Input
-        label="Email"
-        type="email"
-        autoComplete="email"
-        required
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      {status === "error" && (
-        <Alert tone="error">Something went wrong. Please try again in a moment.</Alert>
-      )}
-      {status === "rate_limited" && (
-        <Alert tone="error">
-          You've requested this too many times. Please wait a bit before trying again.
-        </Alert>
-      )}
-      <Button type="submit" isLoading={status === "loading"}>
-        Send reset link
-      </Button>
-    </form>
+    <>
+      <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+        <Input
+          label="Email"
+          type="email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+
+        <div
+          ref={widgetRef}
+          className="cf-turnstile"
+          data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+          data-callback="onTurnstileSuccess"
+        />
+
+        {status === "error" && (
+          <Alert tone="error">Something went wrong. Please try again in a moment.</Alert>
+        )}
+        {status === "rate_limited" && (
+          <Alert tone="error">
+            You've requested this too many times. Please wait a bit before trying again.
+          </Alert>
+        )}
+
+        <Button type="submit" isLoading={status === "loading"} disabled={!captchaToken}>
+          Send reset link
+        </Button>
+      </form>
+    </>
   );
 }
 
