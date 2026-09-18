@@ -90,6 +90,7 @@ export function LoginForm() {
           className="cf-turnstile"
           data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
           data-callback="onTurnstileSuccessLogin"
+          data-size="flexible"
         />
 
         {status === "error" && <Alert tone="error">{message}</Alert>}
