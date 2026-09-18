@@ -127,11 +127,14 @@ export function RegisterForm() {
           onChange={(e) => setConfirmPassword(e.target.value)}
         />
 
-        <div
-          className="cf-turnstile"
-          data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-          data-callback="onTurnstileSuccessRegister"
-        />
+        <div className="rounded-md border border-ink-100 bg-white p-3">
+          <div
+            className="cf-turnstile"
+            data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+            data-callback="onTurnstileSuccessRegister"
+            data-size="flexible"
+          />
+        </div>
 
         {status === "error" && <Alert tone="error">{message}</Alert>}
 
