@@ -136,7 +136,7 @@ export function RegisterForm() {
 
         {status === "error" && <Alert tone="error">{message}</Alert>}
 
-        <Button type="submit" isLoading={status === "loading"}>
+        <Button type="submit" isLoading={status === "loading"} disabled={!captchaToken}>
           Create account
         </Button>
 
